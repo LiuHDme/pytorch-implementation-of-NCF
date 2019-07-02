@@ -18,7 +18,7 @@ def evaluate_model(model, docDataset, K):
     _testList = docDataset.testList
     _testNegList = docDataset.testNegList
     _topk = K
-
+    
     hits, ndcgs = [], []
     for idx in range(len(_testList)):
         (hr, ndcg) = eval_one_rating(model, idx, _testList, _testNegList, K)
