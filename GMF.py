@@ -14,14 +14,14 @@ from time import time
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Run MLP.')
+    parser = argparse.ArgumentParser(description='Run GMF.')
     parser.add_argument('--path', nargs='?', default='/Users/liuhdme/Documents/推荐系统/learnRS/recommender_pytorch/Data/',
                         help='Input data path.')
     parser.add_argument('--epochs', type=int, default=30,
                         help='Number of epochs.')
     parser.add_argument('--batch_size', type=int, default='256',
                         help='Batch size.')
-    parser.add_argument('--layers', nargs='?', default='[16, 32, 16, 8]',
+    parser.add_argument('--embed_dim', type=int, default='8',
                         help='Size of each layer. Note that the first layer is the concatenation of user and item embeddings. So layers[0]/2 is the embedding size.')
     parser.add_argument('--reg_layers', nargs='?', default='[0.0, 0.0, 0.0, 0.0]',
                         help='Regularization for each layer.')
@@ -37,26 +37,19 @@ def parse_args():
                         help='Whether to save the trained model.')
     return parser.parse_args()
 
-class MLP(nn.Module):
-    def __init__(self, num_users, num_items, layers):
+class GMF(nn.Module):
+    def __init__(self, num_users, num_items, embed_dim):
         super().__init__()
-        embed_dim = int(layers[0]/2)
         self.user_embedding = nn.Embedding(num_users, embed_dim)
         self.item_embedding = nn.Embedding(num_items, embed_dim)
-        self.fc_layers = nn.ModuleList()
-        for (input_shape, output_shape) in zip(layers[:-1], layers[1:]):
-            self.fc_layers.append(nn.Linear(input_shape, output_shape))
-        self.output_layer = nn.Linear(layers[-1], 1)
+        self.output_layer = nn.Linear(embed_dim, 1)
 
     def forward(self, feeddict):
         user_input = feeddict['user_input']
         item_input = feeddict['item_input']
         user_embedding = self.user_embedding(user_input)
         item_embedding = self.item_embedding(item_input)
-        x = torch.cat([user_embedding, item_embedding], 1)
-        for fc_layer in self.fc_layers:
-            x = fc_layer(x)
-            x = F.relu(x)
+        x = user_embedding * item_embedding
         logit = self.output_layer(x)
         output = torch.sigmoid(logit)
         return output
@@ -72,7 +65,7 @@ if __name__ == '__main__':
     path = args.path
     epochs = args.epochs
     batch_size = args.batch_size
-    layers = eval(args.layers)
+    embed_dim = args.embed_dim
     reg_layers = eval(args.reg_layers)
     num_neg = args.num_neg
     lr = args.lr
@@ -81,8 +74,8 @@ if __name__ == '__main__':
     out = args.out
 
     topK = 10
-    print('MLP 参数: {} {}'.format(args, '\n'))
-    model_out_file = 'Pretrain/model_{}.ckpt'.format(time())
+    print('GMF 参数: {} {}'.format(args, '\n'))
+    model_out_file = 'Pretrain/GMFmodel_{}.ckpt'.format(time())
 
     # Load data
     t1 = time()
@@ -92,7 +85,7 @@ if __name__ == '__main__':
         format(time()-t1, docDataset.num_users, docDataset.num_items, docDataset.ratingMatrix.nnz, len(docDataset.testList), '\n'))
 
     # Build model
-    model = MLP(docDataset.num_users, docDataset.num_items, layers).to(device)
+    model = GMF(docDataset.num_users, docDataset.num_items, embed_dim).to(device)
     print(model)
     print('\n')
     # Loss and optimizer
@@ -149,4 +142,4 @@ if __name__ == '__main__':
     print('训练结束. Best Epoch {}: HR = {:.4f}, NDCG = {:.4f} {}'.
         format(best_iter, best_hr, best_ndcg, '\n'))
     if out > 0:
-        print('MLP模型存储于 {}'.format(model_out_file))
+        print('GMF模型存储于 {}'.format(model_out_file))
